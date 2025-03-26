@@ -8,12 +8,26 @@ use Response;
 
 class UpdateController extends Controller
 {
+    public function showUpdateButton()
+    {
+        // Ejecutar git fetch para obtener los últimos cambios
+        shell_exec('git fetch origin');
+
+        // Obtener los hashes de las últimas confirmaciones locales y remotas
+        $localCommit = trim(shell_exec('git rev-parse HEAD')); 
+        $remoteCommit = trim(shell_exec('git rev-parse origin/main')); // Cambia 'main' si usas otra rama
+
+        // Verificar si los commits locales y remotos son diferentes
+        $hasChanges = ($localCommit !== $remoteCommit); // true si hay cambios, false si no
+
+        // Pasar la variable a la vista
+        dd($hasChanges);
+        return view('dashboard', compact('hasChanges'));
+    }
+
     public function update()
     {
         try {
-            // Cambiar al directorio raíz de tu proyecto (si es necesario)
-            // shell_exec('cd /path/to/your/project');
-
             // Hacer pull de los cambios de GitHub
             shell_exec('git pull origin main'); // Asumiendo que trabajas con la rama main
 

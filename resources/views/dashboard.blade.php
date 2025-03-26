@@ -4,19 +4,37 @@
             {{ __('Dashboard') }}
         </h2>
     </x-slot>
-    <p>
-        HOLAAAAAAAA
-    </p>
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     {{ __("You're logged in!") }}
-                    <form action="{{ route('update.system') }}" method="get">
-                        <button type="submit" class="btn btn-primary">Actualizar Sistema</button>
-                    </form>
+                    @if(isset($hasChanges) && $hasChanges)
+                        <form id="updateButton" action="{{ route('update.system') }}" method="get" style="display: none;">
+                            <button type="submit" class="btn btn-primary">Actualizar Sistema</button>
+                        </form>
+                    @else
+                        <p>No hay cambios disponibles en GitHub.</p>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        setInterval(function() {
+    fetch("{{ route('check.update') }}")
+        .then(response => response.json())
+        .then(data => {
+            if (data.hasChanges) {
+                // Mostrar el botón si hay cambios
+                document.getElementById('updateButton').style.display = 'block';
+            } else {
+                // Ocultar el botón si no hay cambios
+                document.getElementById('updateButton').style.display = 'none';
+            }
+        });
+}, 60000);  // Comprobar cada 60 segundos
+
+    </script>
 </x-app-layout>
