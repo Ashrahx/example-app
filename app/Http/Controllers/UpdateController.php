@@ -21,43 +21,39 @@ class UpdateController extends Controller
     }
 
     public function update()
-    {
-        if (!cache('update_available', false)) {
-            return response()->json(['error' => 'No updates available'], 400);
-        }
+{
 
-        try {
-            $process = new Process(['git', 'pull', 'origin', 'main']);
-            $process->setTimeout(300);
-            $process->run();
-
-            if (!$process->isSuccessful()) {
-                throw new ProcessFailedException($process);
-            }
-
-            // Actualizar el hash del commit actual en la configuración
-            $output = $process->getOutput();
-            if (preg_match('/[a-f0-9]{40}/', $output, $matches)) {
-                $newCommitHash = $matches[0];
-                $this->updateConfig($newCommitHash);
-            }
-
-            // Limpiar caché y optimizar
-            Artisan::call('optimize:clear');
-
-            cache(['update_available' => false], now()->addHours(1));
-
-            return response()->json([
-                'success' => true,
-                'output' => $output
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'success' => false
-            ], 500);
-        }
+    
+    if (!cache('update_available', false)) {
+        return response()->json(['error' => 'No hay actualizaciones disponibles'], 400);
     }
+
+    try {
+        // Especificar la ruta completa del directorio del proyecto
+        $projectPath = base_path(); // Esto apunta al directorio raíz de Laravel
+        
+        $process = new Process([
+            'C:\\Program Files\\Git\\bin\\git.exe', // Ruta completa a git
+            'pull',
+            'origin',
+            'main'
+        ], base_path());
+        
+        $process->setTimeout(300);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        // Resto del código de actualización...
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Error al actualizar: ' . $e->getMessage(),
+            'success' => false
+        ], 500);
+    }
+}
 
     protected function updateConfig($newCommitHash)
     {
