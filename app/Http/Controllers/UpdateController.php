@@ -29,65 +29,50 @@ class UpdateController extends Controller
     try {
         $projectPath = base_path();
         
-        // 1. Configurar Git adecuadamente
-        $this->setupGitConfig($projectPath);
+        // 1. Crear script batch temporal
+        $scriptContent = "@echo off\n".
+                        "cd /d \"{$projectPath}\"\n".
+                        "\"C:\\Program Files\\Git\\bin\\git.exe\" pull origin main 2>&1\n".
+                        "echo %errorlevel%";
         
-        // 2. Resetear cualquier cambio local que pueda causar conflictos
-        $this->runGitCommand($projectPath, ['reset', '--hard', 'HEAD']);
+        $scriptPath = storage_path('app/update_script.bat');
+        file_put_contents($scriptPath, $scriptContent);
         
-        // 3. Limpiar el directorio de trabajo
-        $this->runGitCommand($projectPath, ['clean', '-fd']);
+        // 2. Ejecutar el script
+        $process = new Process(['cmd', '/c', $scriptPath]);
+        $process->setTimeout(300);
+        $process->run();
         
-        // 4. Hacer pull con estrategia para evitar conflictos
-        $output = $this->runGitCommand($projectPath, ['pull', 'origin', 'main', '--no-rebase', '--strategy-option=theirs']);
+        $output = $process->getOutput();
+        $exitCode = $process->getExitCode();
         
-        // 5. Actualizar dependencias
-        $this->runComposerUpdate($projectPath);
+        // 3. Eliminar script temporal
+        unlink($scriptPath);
         
-        // 6. Actualizar configuración
-        $newCommit = $this->runGitCommand($projectPath, ['rev-parse', 'HEAD']);
-        $this->updateConfig(trim($newCommit));
+        if ($exitCode !== 0) {
+            throw new \RuntimeException("Git pull failed with code {$exitCode}: {$output}");
+        }
+        
+        // 5. Actualizar commit en configuración
+        $newCommit = trim(exec('git rev-parse HEAD'));
+        $this->updateConfig($newCommit);
+        
+        // 6. Limpiar caché
+        \Artisan::call('optimize:clear');
+        cache(['update_available' => false], now()->addHours(1));
         
         return response()->json([
             'success' => true,
-            'output' => $output
+            'output' => $output,
+            'new_commit' => $newCommit
         ]);
         
     } catch (\Exception $e) {
         return response()->json([
-            'error' => 'Fallo en la actualización: ' . $e->getMessage(),
+            'error' => 'Error durante la actualización: ' . $e->getMessage(),
             'success' => false
         ], 500);
     }
-}
-
-private function setupGitConfig($path)
-{
-    // Configurar Git para no interactuar con credenciales
-    $this->runGitCommand($path, ['config', '--local', 'core.askpass', 'echo']);
-    $this->runGitCommand($path, ['config', '--local', 'credential.helper', 'store']);
-}
-
-private function runGitCommand($path, array $commands)
-{
-    $process = new Process(
-        array_merge(['C:\\Program Files\\Git\\bin\\git.exe'], $commands),
-        $path,
-        ['GIT_TERMINAL_PROMPT' => '0'], // Deshabilitar prompts
-        null,
-        300
-    );
-    
-    $process->run();
-    
-    if (!$process->isSuccessful()) {
-        throw new \RuntimeException(
-            "Error en git " . implode(' ', $commands) . ": " . 
-            $process->getErrorOutput() ?: $process->getOutput()
-        );
-    }
-    
-    return $process->getOutput();
 }
 
 private function runComposerUpdate($path)
@@ -97,19 +82,7 @@ private function runComposerUpdate($path)
     $process->run();
     
     if (!$process->isSuccessful()) {
-        throw new \RuntimeException("Error en composer install: " . $process->getErrorOutput());
+        throw new \RuntimeException("Composer install failed: " . $process->getErrorOutput());
     }
 }
-
-    protected function updateConfig($newCommitHash)
-    {
-        $configPath = config_path('app.php');
-        $content = file_get_contents($configPath);
-        $content = preg_replace(
-            "/'current_commit_hash' => '.*?'/",
-            "'current_commit_hash' => '{$newCommitHash}'",
-            $content
-        );
-        file_put_contents($configPath, $content);
-    }
 }
