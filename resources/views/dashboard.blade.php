@@ -5,84 +5,51 @@
         </h2>
     </x-slot>
 
-    <h1>HOLAAAA CAMBIOS NUEVOS ALV</h1>
-    <h1>HOLAAAA CAMBIOS NUEVOS ALV</h1>
-    <h1>HOLAAAA CAMBIOS NUEVOS ALV</h1>
-    
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     {{ __("You're logged in!") }}
-
-                    <div id="update-container" class="hidden">
-    <button id="update-btn" class="btn btn-warning">
-        <i class="fas fa-sync-alt"></i> Actualización disponible
-    </button>
-    <div id="update-progress" class="mt-2 hidden">
-        <div class="progress">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
-        </div>
-        <p class="text-center mt-2">Actualizando...</p>
-    </div>
-</div>
+                    <button id="updateButton" style="display: none;" onclick="applyUpdate()">Actualización disponible</button>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const updateContainer = document.getElementById('update-container');
-    const updateBtn = document.getElementById('update-btn');
-    const updateProgress = document.getElementById('update-progress');
+async function checkForUpdate() {
+    const response = await fetch('/check-update');
+    const data = await response.json();
 
-    // Verificar actualización al cargar la página
-    checkForUpdate();
+    if (data.update_available) {
+        document.getElementById('updateButton').style.display = 'block';
+    }
+}
 
-    // Verificar periódicamente (cada 30 minutos)
-    setInterval(checkForUpdate, 30 * 60 * 1000);
+async function applyUpdate() {
+    const button = document.getElementById('updateButton');
+    button.disabled = true;
+    button.innerText = 'Actualizando...';
 
-    function checkForUpdate() {
-        fetch('/check-update')
-            .then(response => response.json())
-            .then(data => {
-                if (data.update_available) {
-                    updateContainer.classList.remove('hidden');
-                } else {
-                    updateContainer.classList.add('hidden');
-                }
-            });
+    const response = await fetch('/apply-update', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    });
+
+    const data = await response.json();
+    
+    if (data.message) {
+        alert('Actualización completada');
+        location.reload();
+    } else {
+        alert('Error en la actualización: ' + data.error);
     }
 
-    updateBtn.addEventListener('click', function() {
-        if (confirm('¿Estás seguro de que deseas actualizar la aplicación?')) {
-            updateBtn.disabled = true;
-            updateProgress.classList.remove('hidden');
-            
-            fetch('/do-update', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('¡Aplicación actualizada correctamente! La página se recargará.');
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    alert('Error: ' + (data.error || 'Error desconocido'));
-                    updateBtn.disabled = false;
-                    updateProgress.classList.add('hidden');
-                }
-            })
-            .catch(error => {
-                alert('Error: ' + error.message);
-                updateBtn.disabled = false;
-                updateProgress.classList.add('hidden');
-            });
-        }
-    });
-});
+    button.disabled = false;
+    button.innerText = 'Actualización disponible';
+}
+
+// Revisar actualizaciones cada 5 minutos
+setInterval(checkForUpdate, 300000);
+checkForUpdate();
 </script>
+
                 </div>
             </div>
         </div>
