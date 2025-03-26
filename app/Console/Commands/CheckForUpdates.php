@@ -12,27 +12,38 @@ class CheckForUpdates extends Command
     protected $description = 'Check for GitHub repository updates';
 
     public function handle()
-    {
-        try {
-            $response = Http::get('https://api.github.com/repos/Ashrahx/example-app/commits', [
-                'per_page' => 1,
-                'sha' => config('app.current_commit_hash'),
-            ]);
+{
+    try {
+        $currentCommit = config('app.current_commit_hash');
+        $this->info("Current commit: ".$currentCommit);
+        
+        $response = Http::get('https://api.github.com/repos/Ashrahx/example-app/commits', [
+            'per_page' => 1,
+            'sha' => 'main',
+        ]);
 
-            if ($response->successful()) {
-                $latestCommit = $response->json()[0]['sha'] ?? null;
-                $currentCommit = config('app.current_commit_hash');
-
-                if ($latestCommit && $latestCommit !== $currentCommit) {
-                    cache(['update_available' => true, 'latest_commit' => $latestCommit], now()->addHours(1));
-                    return true;
-                }
+        $this->info("GitHub API status: ".$response->status());
+        
+        if ($response->successful()) {
+            $latestCommit = $response->json()[0]['sha'] ?? null;
+            $this->info("Latest commit: ".$latestCommit);
+            
+            if ($latestCommit && $latestCommit !== $currentCommit) {
+                cache([
+                    'update_available' => true,
+                    'latest_commit' => $latestCommit
+                ], now()->addHours(1));
+                
+                $this->info("Update available! Cached successfully.");
+                return true;
             }
-        } catch (\Exception $e) {
-            Log::error('Error checking for updates: ' . $e->getMessage());
         }
-
-        cache(['update_available' => false], now()->addHours(1));
-        return false;
+    } catch (\Exception $e) {
+        $this->error("Error: ".$e->getMessage());
     }
+
+    cache(['update_available' => false], now()->addHours(1));
+    $this->info("No updates available");
+    return false;
+}
 }

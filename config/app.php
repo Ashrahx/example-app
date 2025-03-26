@@ -15,7 +15,7 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
-    'current_commit_hash' => env('APP_CURRENT_COMMIT', 'initial-hash'),
+    'current_commit_hash' => env('137f8012285dcd51d3af8a4044f1ecbd3c4e8e93'),
 
     /*
     |--------------------------------------------------------------------------
