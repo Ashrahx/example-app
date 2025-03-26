@@ -22,36 +22,82 @@ class UpdateController extends Controller
 
     public function update()
 {
-
-    
     if (!cache('update_available', false)) {
         return response()->json(['error' => 'No hay actualizaciones disponibles'], 400);
     }
 
     try {
-        // Especificar la ruta completa del directorio del proyecto
-        $projectPath = base_path(); // Esto apunta al directorio raíz de Laravel
+        $projectPath = base_path();
         
-        $process = new Process([
-            'C:\\Program Files\\Git\\bin\\git.exe', // Ruta completa a git
-            'pull',
-            'origin',
-            'main'
-        ], base_path());
+        // 1. Configurar Git adecuadamente
+        $this->setupGitConfig($projectPath);
         
-        $process->setTimeout(300);
-        $process->run();
-
-        if (!$process->isSuccessful()) {
-            throw new ProcessFailedException($process);
-        }
-
-        // Resto del código de actualización...
+        // 2. Resetear cualquier cambio local que pueda causar conflictos
+        $this->runGitCommand($projectPath, ['reset', '--hard', 'HEAD']);
+        
+        // 3. Limpiar el directorio de trabajo
+        $this->runGitCommand($projectPath, ['clean', '-fd']);
+        
+        // 4. Hacer pull con estrategia para evitar conflictos
+        $output = $this->runGitCommand($projectPath, ['pull', 'origin', 'main', '--no-rebase', '--strategy-option=theirs']);
+        
+        // 5. Actualizar dependencias
+        $this->runComposerUpdate($projectPath);
+        
+        // 6. Actualizar configuración
+        $newCommit = $this->runGitCommand($projectPath, ['rev-parse', 'HEAD']);
+        $this->updateConfig(trim($newCommit));
+        
+        return response()->json([
+            'success' => true,
+            'output' => $output
+        ]);
+        
     } catch (\Exception $e) {
         return response()->json([
-            'error' => 'Error al actualizar: ' . $e->getMessage(),
+            'error' => 'Fallo en la actualización: ' . $e->getMessage(),
             'success' => false
         ], 500);
+    }
+}
+
+private function setupGitConfig($path)
+{
+    // Configurar Git para no interactuar con credenciales
+    $this->runGitCommand($path, ['config', '--local', 'core.askpass', 'echo']);
+    $this->runGitCommand($path, ['config', '--local', 'credential.helper', 'store']);
+}
+
+private function runGitCommand($path, array $commands)
+{
+    $process = new Process(
+        array_merge(['C:\\Program Files\\Git\\bin\\git.exe'], $commands),
+        $path,
+        ['GIT_TERMINAL_PROMPT' => '0'], // Deshabilitar prompts
+        null,
+        300
+    );
+    
+    $process->run();
+    
+    if (!$process->isSuccessful()) {
+        throw new \RuntimeException(
+            "Error en git " . implode(' ', $commands) . ": " . 
+            $process->getErrorOutput() ?: $process->getOutput()
+        );
+    }
+    
+    return $process->getOutput();
+}
+
+private function runComposerUpdate($path)
+{
+    $process = new Process(['composer', 'install'], $path);
+    $process->setTimeout(300);
+    $process->run();
+    
+    if (!$process->isSuccessful()) {
+        throw new \RuntimeException("Error en composer install: " . $process->getErrorOutput());
     }
 }
 
